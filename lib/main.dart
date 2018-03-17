@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
-import 'html_text_view.dart';
+
+import 'package:run/html_text_view.dart';
 
 void main() => runApp(new RunApp());
 
