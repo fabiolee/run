@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HtmlTextView extends StatelessWidget {
   final String data;
@@ -40,8 +42,20 @@ class HtmlTextView extends StatelessWidget {
   // =================================================================================================================
 
   TextSpan _textSpan(Map node) {
-    TextSpan span = new TextSpan(text: node['text'], style: node['style']);
-
+    String href = node['href'];
+    TextSpan span;
+    if (href == null) {
+      span = new TextSpan(text: node['text'], style: node['style']);
+    } else {
+      span = new TextSpan(
+        text: node['text'],
+        style: node['style'],
+        recognizer: new TapGestureRecognizer()
+          ..onTap = () {
+            launch(href);
+          },
+      );
+    }
     return span;
   }
 }
@@ -262,7 +276,7 @@ class HtmlParser {
         }
       } else {
         RegExp re =
-        new RegExp(r'(.*)<\/' + this._getStackLastItem() + r'[^>]*>');
+            new RegExp(r'(.*)<\/' + this._getStackLastItem() + r'[^>]*>');
 
         html = html.replaceAllMapped(re, (Match match) {
           String text = match[0]
@@ -423,13 +437,13 @@ class HtmlParser {
 
           case 'font-weight':
             fontWeight =
-            (value == 'bold') ? FontWeight.bold : FontWeight.normal;
+                (value == 'bold') ? FontWeight.bold : FontWeight.normal;
 
             break;
 
           case 'font-style':
             fontStyle =
-            (value == 'italic') ? FontStyle.italic : FontStyle.normal;
+                (value == 'italic') ? FontStyle.italic : FontStyle.normal;
 
             break;
 
@@ -468,7 +482,7 @@ class HtmlParser {
     this._tag['text'] = text;
     this._tag['style'] = this._parseStyle(this._tag['tag'], this._tag['attrs']);
     this._tag['href'] =
-    (this._tag['attrs']['href'] != null) ? this._tag['attrs']['href'] : '';
+        (this._tag['attrs']['href'] != null) ? this._tag['attrs']['href'] : '';
 
     this._tag.remove('attrs');
 
