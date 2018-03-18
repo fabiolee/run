@@ -1,8 +1,7 @@
-# run
+# Run
 
-Mobile App for https:&#x2F;&#x2F;carirunners.blogspot.com
+Cari Runners blog reader mobile apps written in Flutter.
 
-## Getting Started
+## Setup
 
-For help getting started with Flutter, view our online
-[documentation](https://flutter.io/).
+Create an `android/app/google-services.json` and `ios/Runner/GoogleService-Info.plist` files to include your own Firebase.
