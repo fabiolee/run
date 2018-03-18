@@ -31,6 +31,8 @@ class MainPage extends StatefulWidget {
 
 class MainPageState extends State<MainPage> {
   final FirebaseMessaging _firebaseMessaging = new FirebaseMessaging();
+  bool loading = true;
+  String status;
   List<dom.Element> widgets = [];
 
   @override
@@ -50,11 +52,57 @@ class MainPageState extends State<MainPage> {
     );
   }
 
+  Widget _buildDialog(BuildContext context, PostItem item) {
+    return new AlertDialog(
+      content: new Text("PostItem ${item.urlPath}"),
+      actions: <Widget>[
+        new FlatButton(
+          child: const Text('CLOSE'),
+          onPressed: () {
+            Navigator.pop(context, false);
+          },
+        ),
+        new FlatButton(
+          child: const Text('SHOW'),
+          onPressed: () {
+            Navigator.pop(context, true);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatus() {
+    var spacer = new SizedBox(height: 32.0);
+    return new Container(
+        child: new Padding(
+      padding: new EdgeInsets.all(16.0),
+      child: new Center(
+        child: new Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            new Text(status),
+            spacer,
+            new RaisedButton(
+              onPressed: () {
+                setState(() {
+                  loading = true;
+                  loadData();
+                });
+              },
+              child: new Text('RETRY'),
+            ),
+          ],
+        ),
+      ),
+    ));
+  }
+
   void _configureFirebaseMessaging() {
     _firebaseMessaging.configure(
       onMessage: (Map<String, dynamic> message) {
         print("onMessage: $message");
-        _navigateToPostItem(message);
+        _showPostItemDialog(message);
       },
       onLaunch: (Map<String, dynamic> message) {
         print("onLaunch: $message");
@@ -78,8 +126,10 @@ class MainPageState extends State<MainPage> {
   }
 
   getBody() {
-    if (showLoadingDialog()) {
+    if (_showLoadingDialog()) {
       return getProgressDialog();
+    } else if (_showStatus()) {
+      return _buildStatus();
     } else {
       return getListView();
     }
@@ -123,13 +173,26 @@ class MainPageState extends State<MainPage> {
   }
 
   loadData() async {
-    String dataUrl =
-        "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/pages/6337578441124076615?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA";
-    http.Response response = await http.get(dataUrl);
-    setState(() {
+    String status;
+    List<dom.Element> widgets = [];
+    try {
+      String dataUrl =
+          "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/pages/6337578441124076615?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA";
+      http.Response response = await http.get(dataUrl);
       Map map = json.decode(response.body);
       dom.Document document = parse(map["content"]);
       widgets = document.querySelectorAll("ul li");
+      if (widgets == null || widgets.isEmpty) {
+        status = "No Content Found";
+        widgets = [];
+      }
+    } catch (exception) {
+      status = exception.toString();
+    }
+    setState(() {
+      loading = false;
+      this.status = status;
+      this.widgets = widgets;
     });
   }
 
@@ -142,8 +205,23 @@ class MainPageState extends State<MainPage> {
     }
   }
 
-  showLoadingDialog() {
-    return (widgets.length == 0);
+  bool _showLoadingDialog() {
+    return loading;
+  }
+
+  void _showPostItemDialog(Map<String, dynamic> message) {
+    showDialog<bool>(
+      context: context,
+      child: _buildDialog(context, _postItemForMessage(message)),
+    ).then((bool shouldNavigate) {
+      if (shouldNavigate == true) {
+        _navigateToPostItem(message);
+      }
+    });
+  }
+
+  bool _showStatus() {
+    return status != null;
   }
 }
 
@@ -157,6 +235,8 @@ class PostPage extends StatefulWidget {
 }
 
 class PostPageState extends State<PostPage> {
+  bool loading = true;
+  String status;
   String title;
   String logo;
   String content;
@@ -177,9 +257,37 @@ class PostPageState extends State<PostPage> {
     );
   }
 
+  Widget _buildStatus() {
+    var spacer = new SizedBox(height: 32.0);
+    return new Container(
+        child: new Padding(
+      padding: new EdgeInsets.all(16.0),
+      child: new Center(
+        child: new Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            new Text(status),
+            spacer,
+            new RaisedButton(
+              onPressed: () {
+                setState(() {
+                  loading = true;
+                  loadData();
+                });
+              },
+              child: new Text('RETRY'),
+            ),
+          ],
+        ),
+      ),
+    ));
+  }
+
   getBody() {
-    if (showLoadingDialog()) {
+    if (_showLoadingDialog()) {
       return getProgressDialog();
+    } else if (_showStatus()) {
+      return _buildStatus();
     } else {
       return getListView();
     }
@@ -206,10 +314,14 @@ class PostPageState extends State<PostPage> {
   }
 
   loadData() async {
-    String dataUrl =
-        "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/posts/bypath?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA&path=";
-    http.Response response = await http.get(dataUrl + widget.urlPath);
-    setState(() {
+    String status;
+    String title;
+    String logo;
+    String content;
+    try {
+      String dataUrl =
+          "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/posts/bypath?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA&path=";
+      http.Response response = await http.get(dataUrl + widget.urlPath);
       Map map = json.decode(response.body);
       title = map["title"];
       dom.Document document = parse(map["content"]);
@@ -218,11 +330,27 @@ class PostPageState extends State<PostPage> {
       logo = imgElement.attributes["src"];
       firstElement.remove();
       content = document.body.innerHtml;
+      if (title == null || logo == null || content == null) {
+        status = "No Content Found";
+      }
+    } catch (exception) {
+      status = exception.toString();
+    }
+    setState(() {
+      loading = false;
+      this.status = status;
+      this.title = title;
+      this.logo = logo;
+      this.content = content;
     });
   }
 
-  showLoadingDialog() {
-    return content == null;
+  _showLoadingDialog() {
+    return loading;
+  }
+
+  bool _showStatus() {
+    return status != null;
   }
 }
 
