@@ -1,4 +1,7 @@
 PODS:
+  - Crashlytics (3.9.3):
+    - Fabric (~> 1.7.2)
+  - Fabric (1.7.2)
   - Firebase/Core (4.7.0):
     - FirebaseAnalytics (= 4.0.5)
     - FirebaseCore (= 4.0.12)
@@ -43,6 +46,8 @@ PODS:
     - Flutter
 
 DEPENDENCIES:
+  - Crashlytics
+  - Fabric
   - firebase_messaging (from `Pods/.symlinks/plugins/firebase_messaging-0.2.0/ios`)
   - Flutter (from `Pods/.symlinks/flutter/ios`)
   - path_provider (from `Pods/.symlinks/plugins/path_provider-0.3.1/ios`)
@@ -62,6 +67,8 @@ EXTERNAL SOURCES:
     :path: Pods/.symlinks/plugins/url_launcher-3.0.0/ios
 
 SPEC CHECKSUMS:
+  Crashlytics: dbb07d01876c171c5ccbdf7826410380189e452c
+  Fabric: 9cd6a848efcf1b8b07497e0b6a2e7d336353ba15
   Firebase: dbfb98ccec2dcfcd21ab9cc1b4981a3f3c8c5e26
   firebase_messaging: 9bb8e317daa678ff7f5c59887ea11eca518de21c
   FirebaseAnalytics: 5b02a63ead2c3f0259cfc7f15e053e440587ecf8
@@ -76,6 +83,6 @@ SPEC CHECKSUMS:
   shared_preferences: 1feebfa37bb57264736e16865e7ffae7fc99b523
   url_launcher: 0067ddb8f10d36786672aa0722a21717dba3a298
 
-PODFILE CHECKSUM: 2b8c68eeddaf80fb22c6f653fa1da069ed04ef77
+PODFILE CHECKSUM: 222da805a22232c63fb25651114acf1f42a895ea
 
 COCOAPODS: 1.3.1
