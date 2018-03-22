@@ -54,7 +54,7 @@ class MainPageState extends State<MainPage> {
 
   Widget _buildDialog(BuildContext context, PostItem item) {
     return new AlertDialog(
-      content: new Text("PostItem ${item.urlPath}"),
+      content: new Text("New Run Available!"),
       actions: <Widget>[
         new FlatButton(
           child: const Text('CLOSE'),
@@ -198,11 +198,11 @@ class MainPageState extends State<MainPage> {
 
   Future<Null> _navigateToPostItem(Map<String, dynamic> message) async {
     final PostItem item = _postItemForMessage(message);
-    // Clear away dialogs
-    Navigator.popUntil(context, (Route<dynamic> route) => route is PageRoute);
-    if (!item.route.isCurrent) {
-      Navigator.push(context, item.route);
-    }
+    Navigator.push(
+        context,
+        new MaterialPageRoute(
+          builder: (context) => new PostPage(item.urlPath),
+        ));
   }
 
   bool _showLoadingDialog() {
@@ -357,16 +357,4 @@ class PostPageState extends State<PostPage> {
 class PostItem {
   PostItem({this.urlPath});
   final String urlPath;
-
-  static final Map<String, Route<Null>> routes = <String, Route<Null>>{};
-  Route<Null> get route {
-    final String routeName = '/post/$urlPath';
-    return routes.putIfAbsent(
-      routeName,
-      () => new MaterialPageRoute<Null>(
-            settings: new RouteSettings(name: routeName),
-            builder: (BuildContext context) => new PostPage(urlPath),
-          ),
-    );
-  }
 }
