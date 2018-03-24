@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' show parse;
@@ -35,8 +36,6 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
   bool loading = true;
   String status;
   List<dom.Element> widgets = [];
-  int _currentIndex = 0;
-  List<NavigationIconView> _navigationViews;
   PackageInfo _packageInfo = new PackageInfo(
     packageName: 'Unknown',
     version: 'Unknown',
@@ -47,40 +46,64 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _configureFirebaseMessaging();
-    _initBottomNavigation();
     _initPackageInfo();
     loadData();
   }
 
   @override
-  void dispose() {
-    _disposeBottomNavigation();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final BottomNavigationBar botNavBar = new BottomNavigationBar(
-      items: _navigationViews
-          .map((NavigationIconView navigationView) => navigationView.item)
-          .toList(),
-      currentIndex: _currentIndex,
-      type: BottomNavigationBarType.fixed,
-      onTap: (int index) {
-        setState(() {
-          _navigationViews[_currentIndex].controller.reverse();
-          _currentIndex = index;
-          _navigationViews[_currentIndex].controller.forward();
-        });
-      },
-    );
-
-    return new Scaffold(
-      appBar: new AppBar(
-        title: new Text('Cari Runners'),
+    return new CupertinoTabScaffold(
+      tabBar: new CupertinoTabBar(
+        items: const <BottomNavigationBarItem>[
+          const BottomNavigationBarItem(
+            icon: const Icon(Icons.home),
+            title: const Text('Home'),
+          ),
+          const BottomNavigationBarItem(
+            icon: const Icon(Icons.favorite),
+            title: const Text('Favorites'),
+          ),
+          const BottomNavigationBarItem(
+            icon: const Icon(Icons.settings),
+            title: const Text('Settings'),
+          ),
+        ],
       ),
-      body: _buildTransitionsStack(),
-      bottomNavigationBar: botNavBar,
+      tabBuilder: (BuildContext context, int index) {
+        return new DefaultTextStyle(
+          style: Theme.of(context).textTheme.subhead,
+          child: new CupertinoTabView(
+            builder: (BuildContext context) {
+              switch (index) {
+                case 0:
+                  return new Scaffold(
+                      appBar: new AppBar(
+                        title: new Text('Cari Runners'),
+                      ),
+                      body: getBody(context));
+                  break;
+                case 1:
+                  return new Scaffold(
+                    appBar: new AppBar(
+                      title: new Text('Cari Runners'),
+                    ),
+                    body: new Center(child: new Text("Favorites")),
+                  );
+                  break;
+                case 2:
+                  return new Scaffold(
+                      appBar: new AppBar(
+                        title: new Text('Cari Runners'),
+                      ),
+                      body: _buildSettings());
+                  break;
+                default:
+                  break;
+              }
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -168,37 +191,6 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
     ));
   }
 
-  Widget _buildTransitionsStack() {
-    final List<FadeTransition> transitions = <FadeTransition>[];
-
-    for (NavigationIconView view in _navigationViews) {
-      Widget body;
-      switch (view._title) {
-        case "Home":
-          body = getBody();
-          break;
-        case "Favorites":
-          body = new Center(child: new Text("Favorites"));
-          break;
-        case "Settings":
-          body = _buildSettings();
-          break;
-      }
-      transitions.add(view.transition(context, body));
-    }
-
-    // We want to have the newly animating (fading in) views on top.
-    transitions.sort((FadeTransition a, FadeTransition b) {
-      final Animation<double> aAnimation = a.opacity;
-      final Animation<double> bAnimation = b.opacity;
-      final double aValue = aAnimation.value;
-      final double bValue = bAnimation.value;
-      return aValue.compareTo(bValue);
-    });
-
-    return new Stack(children: transitions);
-  }
-
   void _configureFirebaseMessaging() {
     _firebaseMessaging.configure(
       onMessage: (Map<String, dynamic> message) {
@@ -226,31 +218,27 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
     });
   }
 
-  _disposeBottomNavigation() {
-    for (NavigationIconView view in _navigationViews) view.controller.dispose();
-  }
-
-  Widget getBody() {
+  Widget getBody(BuildContext context) {
     if (_showLoadingDialog()) {
       return getProgressDialog();
     } else if (_showStatus()) {
       return _buildStatus();
     } else {
-      return getListView();
+      return getListView(context);
     }
   }
 
-  ListView getListView() => new ListView.builder(
+  ListView getListView(BuildContext context) => new ListView.builder(
       itemCount: widgets.length,
       itemBuilder: (context, position) {
-        return getRow(position);
+        return getRow(context, position);
       });
 
   Widget getProgressDialog() {
     return new Center(child: new CircularProgressIndicator());
   }
 
-  Widget getRow(int position) {
+  Widget getRow(BuildContext context, int position) {
     return new GestureDetector(
       child: new Container(
           child: new Padding(
@@ -281,31 +269,6 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
       version = _packageInfo.version + " (" + _packageInfo.buildNumber + ")";
     }
     return version;
-  }
-
-  void _initBottomNavigation() {
-    _navigationViews = <NavigationIconView>[
-      new NavigationIconView(
-        icon: const Icon(Icons.home),
-        title: 'Home',
-        vsync: this,
-      ),
-      new NavigationIconView(
-        icon: const Icon(Icons.favorite),
-        title: 'Favorites',
-        vsync: this,
-      ),
-      new NavigationIconView(
-        icon: const Icon(Icons.settings),
-        title: 'Settings',
-        vsync: this,
-      ),
-    ];
-
-    for (NavigationIconView view in _navigationViews)
-      view.controller.addListener(_rebuild);
-
-    _navigationViews[_currentIndex].controller.value = 1.0;
   }
 
   Future<Null> _initPackageInfo() async {
@@ -346,17 +309,13 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   Future<Null> _navigateToPostItem(Map<String, dynamic> message) async {
     final PostItem item = _postItemForMessage(message);
+    // Clear away dialogs
+    Navigator.popUntil(context, (Route<dynamic> route) => route is PageRoute);
     Navigator.push(
         context,
         new MaterialPageRoute(
           builder: (context) => new PostPage(item.urlPath),
         ));
-  }
-
-  void _rebuild() {
-    setState(() {
-      // Rebuild in order to animate views.
-    });
   }
 
   bool _showLoadingDialog() {
@@ -376,53 +335,6 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   bool _showStatus() {
     return status != null;
-  }
-}
-
-class NavigationIconView {
-  NavigationIconView({
-    Widget icon,
-    String title,
-    TickerProvider vsync,
-  })
-      : _icon = icon,
-        _title = title,
-        item = new BottomNavigationBarItem(
-          icon: icon,
-          title: new Text(title),
-        ),
-        controller = new AnimationController(
-          duration: kThemeAnimationDuration,
-          vsync: vsync,
-        ) {
-    _animation = new CurvedAnimation(
-      parent: controller,
-      curve: const Interval(0.5, 1.0, curve: Curves.fastOutSlowIn),
-    );
-  }
-
-  final Widget _icon;
-  final String _title;
-  final BottomNavigationBarItem item;
-  final AnimationController controller;
-  CurvedAnimation _animation;
-
-  FadeTransition transition(BuildContext context, Widget body) {
-    final ThemeData themeData = Theme.of(context);
-    Color iconColor = themeData.brightness == Brightness.light
-        ? themeData.primaryColor
-        : themeData.accentColor;
-
-    return new FadeTransition(
-      opacity: _animation,
-      child: new SlideTransition(
-          position: new Tween<Offset>(
-            begin: const Offset(0.0, 0.02), // Slightly down.
-            end: Offset.zero,
-          )
-              .animate(_animation),
-          child: body),
-    );
   }
 }
 
