@@ -37,6 +37,8 @@ PODS:
     - nanopb/encode (= 0.3.8)
   - nanopb/decode (0.3.8)
   - nanopb/encode (0.3.8)
+  - package_info (0.0.1):
+    - Flutter
   - path_provider (0.0.1):
     - Flutter
   - Protobuf (3.5.0)
@@ -50,6 +52,7 @@ DEPENDENCIES:
   - Fabric
   - firebase_messaging (from `Pods/.symlinks/plugins/firebase_messaging-0.2.0/ios`)
   - Flutter (from `Pods/.symlinks/flutter/ios`)
+  - package_info (from `Pods/.symlinks/plugins/package_info-0.3.0/ios`)
   - path_provider (from `Pods/.symlinks/plugins/path_provider-0.3.1/ios`)
   - shared_preferences (from `Pods/.symlinks/plugins/shared_preferences-0.3.3/ios`)
   - url_launcher (from `Pods/.symlinks/plugins/url_launcher-3.0.0/ios`)
@@ -59,6 +62,8 @@ EXTERNAL SOURCES:
     :path: Pods/.symlinks/plugins/firebase_messaging-0.2.0/ios
   Flutter:
     :path: Pods/.symlinks/flutter/ios
+  package_info:
+    :path: Pods/.symlinks/plugins/package_info-0.3.0/ios
   path_provider:
     :path: Pods/.symlinks/plugins/path_provider-0.3.1/ios
   shared_preferences:
@@ -78,6 +83,7 @@ SPEC CHECKSUMS:
   Flutter: 58dd7d1b27887414a370fcccb9e645c08ffd7a6a
   GoogleToolboxForMac: 2501e2ad72a52eb3dfe7bd9aee7dad11b858bd20
   nanopb: 5601e6bca2dbf1ed831b519092ec110f66982ca3
+  package_info: 78cabb3c322943c55d39676f4a5bfc748c01d055
   path_provider: f96fff6166a8867510d2c25fdcc346327cc4b259
   Protobuf: 8a9838fba8dae3389230e1b7f8c104aa32389c03
   shared_preferences: 1feebfa37bb57264736e16865e7ffae7fc99b523

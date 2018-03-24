@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
+import 'package:package_info/package_info.dart';
 
 import 'package:run/html_text_view.dart';
 
@@ -29,26 +30,57 @@ class MainPage extends StatefulWidget {
   createState() => new MainPageState();
 }
 
-class MainPageState extends State<MainPage> {
+class MainPageState extends State<MainPage> with TickerProviderStateMixin {
   final FirebaseMessaging _firebaseMessaging = new FirebaseMessaging();
   bool loading = true;
   String status;
   List<dom.Element> widgets = [];
+  int _currentIndex = 0;
+  List<NavigationIconView> _navigationViews;
+  PackageInfo _packageInfo = new PackageInfo(
+    packageName: 'Unknown',
+    version: 'Unknown',
+    buildNumber: 'Unknown',
+  );
 
   @override
   void initState() {
     super.initState();
     _configureFirebaseMessaging();
+    _initBottomNavigation();
+    _initPackageInfo();
     loadData();
   }
 
   @override
+  void dispose() {
+    _disposeBottomNavigation();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final BottomNavigationBar botNavBar = new BottomNavigationBar(
+      items: _navigationViews
+          .map((NavigationIconView navigationView) => navigationView.item)
+          .toList(),
+      currentIndex: _currentIndex,
+      type: BottomNavigationBarType.fixed,
+      onTap: (int index) {
+        setState(() {
+          _navigationViews[_currentIndex].controller.reverse();
+          _currentIndex = index;
+          _navigationViews[_currentIndex].controller.forward();
+        });
+      },
+    );
+
     return new Scaffold(
       appBar: new AppBar(
         title: new Text('Cari Runners'),
       ),
-      body: getBody(),
+      body: _buildTransitionsStack(),
+      bottomNavigationBar: botNavBar,
     );
   }
 
@@ -69,6 +101,44 @@ class MainPageState extends State<MainPage> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildSettings() {
+    return new DecoratedBox(
+      decoration: const BoxDecoration(color: const Color(0xFFEFEFF4)),
+      child: new ListView(
+        children: <Widget>[
+          const Padding(padding: const EdgeInsets.only(top: 32.0)),
+          new Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: const Border(
+                top: const BorderSide(
+                    color: const Color(0xFFBCBBC1), width: 0.0),
+                bottom: const BorderSide(
+                    color: const Color(0xFFBCBBC1), width: 0.0),
+              ),
+            ),
+            height: 44.0,
+            child: new Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: new Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  new Text("Version", style: Theme.of(context).textTheme.body1),
+                  new Text(
+                    _getVersion(_packageInfo),
+                    style: Theme.of(context).textTheme.caption,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -98,6 +168,37 @@ class MainPageState extends State<MainPage> {
     ));
   }
 
+  Widget _buildTransitionsStack() {
+    final List<FadeTransition> transitions = <FadeTransition>[];
+
+    for (NavigationIconView view in _navigationViews) {
+      Widget body;
+      switch (view._title) {
+        case "Home":
+          body = getBody();
+          break;
+        case "Favorites":
+          body = new Center(child: new Text("Favorites"));
+          break;
+        case "Settings":
+          body = _buildSettings();
+          break;
+      }
+      transitions.add(view.transition(context, body));
+    }
+
+    // We want to have the newly animating (fading in) views on top.
+    transitions.sort((FadeTransition a, FadeTransition b) {
+      final Animation<double> aAnimation = a.opacity;
+      final Animation<double> bAnimation = b.opacity;
+      final double aValue = aAnimation.value;
+      final double bValue = bAnimation.value;
+      return aValue.compareTo(bValue);
+    });
+
+    return new Stack(children: transitions);
+  }
+
   void _configureFirebaseMessaging() {
     _firebaseMessaging.configure(
       onMessage: (Map<String, dynamic> message) {
@@ -125,7 +226,11 @@ class MainPageState extends State<MainPage> {
     });
   }
 
-  getBody() {
+  _disposeBottomNavigation() {
+    for (NavigationIconView view in _navigationViews) view.controller.dispose();
+  }
+
+  Widget getBody() {
     if (_showLoadingDialog()) {
       return getProgressDialog();
     } else if (_showStatus()) {
@@ -141,7 +246,7 @@ class MainPageState extends State<MainPage> {
         return getRow(position);
       });
 
-  getProgressDialog() {
+  Widget getProgressDialog() {
     return new Center(child: new CircularProgressIndicator());
   }
 
@@ -165,6 +270,49 @@ class MainPageState extends State<MainPage> {
             ));
       },
     );
+  }
+
+  String _getVersion(PackageInfo _packageInfo) {
+    String version;
+    const bool _kReleaseMode = const bool.fromEnvironment("dart.vm.product");
+    if (_kReleaseMode) {
+      version = _packageInfo.version;
+    } else {
+      version = _packageInfo.version + " (" + _packageInfo.buildNumber + ")";
+    }
+    return version;
+  }
+
+  void _initBottomNavigation() {
+    _navigationViews = <NavigationIconView>[
+      new NavigationIconView(
+        icon: const Icon(Icons.home),
+        title: 'Home',
+        vsync: this,
+      ),
+      new NavigationIconView(
+        icon: const Icon(Icons.favorite),
+        title: 'Favorites',
+        vsync: this,
+      ),
+      new NavigationIconView(
+        icon: const Icon(Icons.settings),
+        title: 'Settings',
+        vsync: this,
+      ),
+    ];
+
+    for (NavigationIconView view in _navigationViews)
+      view.controller.addListener(_rebuild);
+
+    _navigationViews[_currentIndex].controller.value = 1.0;
+  }
+
+  Future<Null> _initPackageInfo() async {
+    final PackageInfo info = await PackageInfo.fromPlatform();
+    setState(() {
+      _packageInfo = info;
+    });
   }
 
   PostItem _postItemForMessage(Map<String, dynamic> message) {
@@ -205,6 +353,12 @@ class MainPageState extends State<MainPage> {
         ));
   }
 
+  void _rebuild() {
+    setState(() {
+      // Rebuild in order to animate views.
+    });
+  }
+
   bool _showLoadingDialog() {
     return loading;
   }
@@ -222,6 +376,53 @@ class MainPageState extends State<MainPage> {
 
   bool _showStatus() {
     return status != null;
+  }
+}
+
+class NavigationIconView {
+  NavigationIconView({
+    Widget icon,
+    String title,
+    TickerProvider vsync,
+  })
+      : _icon = icon,
+        _title = title,
+        item = new BottomNavigationBarItem(
+          icon: icon,
+          title: new Text(title),
+        ),
+        controller = new AnimationController(
+          duration: kThemeAnimationDuration,
+          vsync: vsync,
+        ) {
+    _animation = new CurvedAnimation(
+      parent: controller,
+      curve: const Interval(0.5, 1.0, curve: Curves.fastOutSlowIn),
+    );
+  }
+
+  final Widget _icon;
+  final String _title;
+  final BottomNavigationBarItem item;
+  final AnimationController controller;
+  CurvedAnimation _animation;
+
+  FadeTransition transition(BuildContext context, Widget body) {
+    final ThemeData themeData = Theme.of(context);
+    Color iconColor = themeData.brightness == Brightness.light
+        ? themeData.primaryColor
+        : themeData.accentColor;
+
+    return new FadeTransition(
+      opacity: _animation,
+      child: new SlideTransition(
+          position: new Tween<Offset>(
+            begin: const Offset(0.0, 0.02), // Slightly down.
+            end: Offset.zero,
+          )
+              .animate(_animation),
+          child: body),
+    );
   }
 }
 
