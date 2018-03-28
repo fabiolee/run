@@ -10,7 +10,8 @@ import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
 import 'package:package_info/package_info.dart';
 
-import 'package:run/html_text_view.dart';
+import 'database.dart';
+import 'html_text_view.dart';
 
 void main() => runApp(new RunApp());
 
@@ -33,21 +34,14 @@ class MainPage extends StatefulWidget {
 
 class MainPageState extends State<MainPage> with TickerProviderStateMixin {
   final FirebaseMessaging _firebaseMessaging = new FirebaseMessaging();
-  bool loading = true;
   String status;
-  List<dom.Element> widgets = [];
-  PackageInfo _packageInfo = new PackageInfo(
-    packageName: 'Unknown',
-    version: 'Unknown',
-    buildNumber: 'Unknown',
-  );
+  List<FavoriteModel> favoriteList = [];
 
   @override
   void initState() {
     super.initState();
     _configureFirebaseMessaging();
-    _initPackageInfo();
-    loadData();
+    _loadData();
   }
 
   @override
@@ -70,38 +64,24 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
         ],
       ),
       tabBuilder: (BuildContext context, int index) {
-        return new DefaultTextStyle(
-          style: Theme.of(context).textTheme.subhead,
-          child: new CupertinoTabView(
-            builder: (BuildContext context) {
-              switch (index) {
-                case 0:
-                  return new Scaffold(
-                      appBar: new AppBar(
-                        title: new Text('Cari Runners'),
-                      ),
-                      body: getBody(context));
-                  break;
-                case 1:
-                  return new Scaffold(
-                    appBar: new AppBar(
-                      title: new Text('Cari Runners'),
-                    ),
-                    body: new Center(child: new Text("Favorites")),
-                  );
-                  break;
-                case 2:
-                  return new Scaffold(
-                      appBar: new AppBar(
-                        title: new Text('Cari Runners'),
-                      ),
-                      body: _buildSettings());
-                  break;
-                default:
-                  break;
-              }
-            },
-          ),
+        return new CupertinoTabView(
+          builder: (BuildContext context) {
+            switch (index) {
+              case 0:
+                return new HomeTab(
+                    favoriteList, _handleFavoriteAdded, _handleFavoriteRemoved);
+                break;
+              case 1:
+                return new FavoriteTab(status, favoriteList,
+                    _handleFavoriteAdded, _handleFavoriteRemoved);
+                break;
+              case 2:
+                return new SettingTab();
+                break;
+              default:
+                break;
+            }
+          },
         );
       },
     );
@@ -127,7 +107,374 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSettings() {
+  void _configureFirebaseMessaging() {
+    _firebaseMessaging.configure(
+      onMessage: (Map<String, dynamic> message) {
+        print("onMessage: $message");
+        _showPostItemDialog(message);
+      },
+      onLaunch: (Map<String, dynamic> message) {
+        print("onLaunch: $message");
+        _navigateToPostItem(message);
+      },
+      onResume: (Map<String, dynamic> message) {
+        print("onResume: $message");
+        _navigateToPostItem(message);
+      },
+    );
+    _firebaseMessaging.requestNotificationPermissions(
+        const IosNotificationSettings(sound: true, badge: true, alert: true));
+    _firebaseMessaging.onIosSettingsRegistered
+        .listen((IosNotificationSettings settings) {
+      print("Settings registered: $settings");
+    });
+    _firebaseMessaging.getToken().then((String token) {
+      assert(token != null);
+      print("Push Messaging token: $token");
+    });
+  }
+
+  void _handleFavoriteAdded(FavoriteModel model) {
+    setState(() {
+      status = null;
+      favoriteList.add(model);
+    });
+  }
+
+  void _handleFavoriteRemoved(FavoriteModel model) {
+    setState(() {
+      favoriteList.remove(model);
+      if (favoriteList == null || favoriteList.isEmpty) {
+        status = "No Favorite Found";
+        favoriteList = [];
+      }
+    });
+  }
+
+  void _loadData() async {
+    String status;
+    List<FavoriteModel> favoriteList = [];
+    try {
+      favoriteList = await queryAllFavorites();
+      if (favoriteList == null || favoriteList.isEmpty) {
+        status = "No Favorite Found";
+        favoriteList = [];
+      }
+    } catch (exception) {
+      status = exception.toString();
+    }
+    setState(() {
+      this.status = status;
+      this.favoriteList = favoriteList;
+    });
+  }
+
+  Future<Null> _navigateToPostItem(Map<String, dynamic> message) async {
+    final PostItem item = _postItemForMessage(message);
+    // Clear away dialogs
+    Navigator.popUntil(context, (Route<dynamic> route) => route is PageRoute);
+    Navigator.push(
+        context,
+        new MaterialPageRoute(
+          builder: (context) => new PostPage(item.urlPath),
+        ));
+  }
+
+  PostItem _postItemForMessage(Map<String, dynamic> message) {
+    final String urlPath = Uri.parse(message['url']).path;
+    return new PostItem(urlPath: urlPath);
+  }
+
+  void _showPostItemDialog(Map<String, dynamic> message) {
+    showDialog<bool>(
+      context: context,
+      child: _buildDialog(context, _postItemForMessage(message)),
+    ).then((bool shouldNavigate) {
+      if (shouldNavigate == true) {
+        _navigateToPostItem(message);
+      }
+    });
+  }
+}
+
+class HomeTab extends StatefulWidget {
+  final List<FavoriteModel> favoriteList;
+  final ValueChanged<FavoriteModel> onFavoriteAdded;
+  final ValueChanged<FavoriteModel> onFavoriteRemoved;
+
+  HomeTab(this.favoriteList, this.onFavoriteAdded, this.onFavoriteRemoved);
+
+  @override
+  createState() => new HomeTabState();
+}
+
+class HomeTabState extends State<HomeTab> {
+  bool loading = true;
+  String status;
+  List<dom.Element> elementList = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+        appBar: new AppBar(
+          title: new Text('Cari Runners'),
+        ),
+        body: _buildBody(context));
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_showLoadingDialog()) {
+      return _buildProgressDialog();
+    } else if (_showStatus()) {
+      return _buildStatus();
+    } else {
+      return _buildListView(context);
+    }
+  }
+
+  ListView _buildListView(BuildContext context) => new ListView.builder(
+      itemCount: elementList.length,
+      itemBuilder: (context, position) {
+        return _buildListViewRow(context, position);
+      });
+
+  Widget _buildListViewRow(BuildContext context, int position) {
+    String title = elementList[position].text;
+    String urlPath = Uri
+        .parse(elementList[position].querySelector("a").attributes["href"])
+        .path;
+    FavoriteModel model;
+    bool isFavorited = false;
+    for (FavoriteModel favorite in widget.favoriteList) {
+      if (favorite.urlPath == (urlPath)) {
+        model = favorite;
+        isFavorited = true;
+        break;
+      }
+    }
+    ;
+    if (model == null) {
+      model = new FavoriteModel(null, title, urlPath);
+    }
+    return new GestureDetector(
+      child: new Container(
+          child: new Padding(
+              padding: new EdgeInsets.all(16.0),
+              child: new Row(
+                children: <Widget>[
+                  new Expanded(
+                      child: new Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      new Text(
+                        title,
+                        style: Theme.of(context).textTheme.subhead,
+                      )
+                    ],
+                  )),
+                  new FavoriteIconButton(model, isFavorited,
+                      widget.onFavoriteAdded, widget.onFavoriteRemoved),
+                ],
+              )),
+          decoration: new BoxDecoration(
+              border:
+                  new Border(bottom: new BorderSide(color: Colors.grey[200])))),
+      onTap: () {
+        Navigator.push(
+            context,
+            new MaterialPageRoute(
+              builder: (context) => new PostPage(urlPath),
+            ));
+      },
+    );
+  }
+
+  Widget _buildProgressDialog() {
+    return new Center(child: new CircularProgressIndicator());
+  }
+
+  Widget _buildStatus() {
+    var spacer = new SizedBox(height: 32.0);
+    return new Container(
+        child: new Padding(
+      padding: new EdgeInsets.all(16.0),
+      child: new Center(
+        child: new Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            new Text(status),
+            spacer,
+            new RaisedButton(
+              onPressed: () {
+                setState(() {
+                  loading = true;
+                  _loadData();
+                });
+              },
+              child: new Text('RETRY'),
+            ),
+          ],
+        ),
+      ),
+    ));
+  }
+
+  _loadData() async {
+    String status;
+    List<dom.Element> elementList = [];
+    try {
+      String dataUrl =
+          "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/pages/6337578441124076615?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA";
+      http.Response response = await http.get(dataUrl);
+      Map map = json.decode(response.body);
+      dom.Document document = parse(map["content"]);
+      elementList = document.querySelectorAll("ul li");
+      if (elementList == null || elementList.isEmpty) {
+        status = "No Content Found";
+        elementList = [];
+      }
+    } catch (exception) {
+      status = exception.toString();
+    }
+    setState(() {
+      this.loading = false;
+      this.status = status;
+      this.elementList = elementList;
+    });
+  }
+
+  bool _showLoadingDialog() {
+    return loading;
+  }
+
+  bool _showStatus() {
+    return status != null;
+  }
+}
+
+class FavoriteTab extends StatefulWidget {
+  final String status;
+  final List<FavoriteModel> favoriteList;
+  final ValueChanged<FavoriteModel> onFavoriteAdded;
+  final ValueChanged<FavoriteModel> onFavoriteRemoved;
+
+  FavoriteTab(this.status, this.favoriteList, this.onFavoriteAdded,
+      this.onFavoriteRemoved);
+
+  @override
+  createState() => new FavoriteTabState();
+}
+
+class FavoriteTabState extends State<FavoriteTab> {
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+        appBar: new AppBar(
+          title: new Text('Cari Runners'),
+        ),
+        body: _buildBody(context));
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_showStatus()) {
+      return _buildStatus();
+    } else {
+      return _buildListView(context);
+    }
+  }
+
+  ListView _buildListView(BuildContext context) => new ListView.builder(
+      itemCount: widget.favoriteList.length,
+      itemBuilder: (context, position) {
+        return _buildListViewRow(context, position);
+      });
+
+  Widget _buildListViewRow(BuildContext context, int position) {
+    FavoriteModel model = widget.favoriteList[position];
+    String title = model.title;
+    String urlPath = model.urlPath;
+    return new GestureDetector(
+      child: new Container(
+          child: new Padding(
+              padding: new EdgeInsets.all(16.0),
+              child: new Row(
+                children: <Widget>[
+                  new Expanded(
+                      child: new Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      new Text(
+                        title,
+                        style: Theme.of(context).textTheme.subhead,
+                      )
+                    ],
+                  )),
+                  new FavoriteIconButton(model, true, widget.onFavoriteAdded,
+                      widget.onFavoriteRemoved),
+                ],
+              )),
+          decoration: new BoxDecoration(
+              border:
+                  new Border(bottom: new BorderSide(color: Colors.grey[200])))),
+      onTap: () {
+        Navigator.push(
+            context,
+            new MaterialPageRoute(
+              builder: (context) => new PostPage(urlPath),
+            ));
+      },
+    );
+  }
+
+  Widget _buildStatus() {
+    return new Container(
+        child: new Padding(
+      padding: new EdgeInsets.all(16.0),
+      child: new Center(
+        child: new Text(widget.status),
+      ),
+    ));
+  }
+
+  bool _showStatus() {
+    return widget.status != null;
+  }
+}
+
+class SettingTab extends StatefulWidget {
+  @override
+  createState() => new SettingTabState();
+}
+
+class SettingTabState extends State<SettingTab> {
+  PackageInfo _packageInfo = new PackageInfo(
+    packageName: 'Unknown',
+    version: 'Unknown',
+    buildNumber: 'Unknown',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _initPackageInfo();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+        appBar: new AppBar(
+          title: new Text('Cari Runners'),
+        ),
+        body: _buildBody());
+  }
+
+  Widget _buildBody() {
     return new DecoratedBox(
       decoration: const BoxDecoration(color: const Color(0xFFEFEFF4)),
       child: new ListView(
@@ -165,101 +512,6 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildStatus() {
-    var spacer = new SizedBox(height: 32.0);
-    return new Container(
-        child: new Padding(
-      padding: new EdgeInsets.all(16.0),
-      child: new Center(
-        child: new Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            new Text(status),
-            spacer,
-            new RaisedButton(
-              onPressed: () {
-                setState(() {
-                  loading = true;
-                  loadData();
-                });
-              },
-              child: new Text('RETRY'),
-            ),
-          ],
-        ),
-      ),
-    ));
-  }
-
-  void _configureFirebaseMessaging() {
-    _firebaseMessaging.configure(
-      onMessage: (Map<String, dynamic> message) {
-        print("onMessage: $message");
-        _showPostItemDialog(message);
-      },
-      onLaunch: (Map<String, dynamic> message) {
-        print("onLaunch: $message");
-        _navigateToPostItem(message);
-      },
-      onResume: (Map<String, dynamic> message) {
-        print("onResume: $message");
-        _navigateToPostItem(message);
-      },
-    );
-    _firebaseMessaging.requestNotificationPermissions(
-        const IosNotificationSettings(sound: true, badge: true, alert: true));
-    _firebaseMessaging.onIosSettingsRegistered
-        .listen((IosNotificationSettings settings) {
-      print("Settings registered: $settings");
-    });
-    _firebaseMessaging.getToken().then((String token) {
-      assert(token != null);
-      print("Push Messaging token: $token");
-    });
-  }
-
-  Widget getBody(BuildContext context) {
-    if (_showLoadingDialog()) {
-      return getProgressDialog();
-    } else if (_showStatus()) {
-      return _buildStatus();
-    } else {
-      return getListView(context);
-    }
-  }
-
-  ListView getListView(BuildContext context) => new ListView.builder(
-      itemCount: widgets.length,
-      itemBuilder: (context, position) {
-        return getRow(context, position);
-      });
-
-  Widget getProgressDialog() {
-    return new Center(child: new CircularProgressIndicator());
-  }
-
-  Widget getRow(BuildContext context, int position) {
-    return new GestureDetector(
-      child: new Container(
-          child: new Padding(
-              padding: new EdgeInsets.all(16.0),
-              child: new Text(widgets[position].text)),
-          decoration: new BoxDecoration(
-              border:
-                  new Border(bottom: new BorderSide(color: Colors.grey[200])))),
-      onTap: () {
-        String urlPath = Uri
-            .parse(widgets[position].querySelector("a").attributes["href"])
-            .path;
-        Navigator.push(
-            context,
-            new MaterialPageRoute(
-              builder: (context) => new PostPage(urlPath),
-            ));
-      },
-    );
-  }
-
   String _getVersion(PackageInfo _packageInfo) {
     String version;
     const bool _kReleaseMode = const bool.fromEnvironment("dart.vm.product");
@@ -277,64 +529,40 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
       _packageInfo = info;
     });
   }
+}
 
-  PostItem _postItemForMessage(Map<String, dynamic> message) {
-    final String urlPath = Uri.parse(message['url']).path;
-    return new PostItem(urlPath: urlPath);
+class FavoriteIconButton extends StatefulWidget {
+  final FavoriteModel _model;
+  final bool _isFavorited;
+  final ValueChanged<FavoriteModel> _onFavoriteAdded;
+  final ValueChanged<FavoriteModel> _onFavoriteRemoved;
+
+  FavoriteIconButton(this._model, this._isFavorited, this._onFavoriteAdded,
+      this._onFavoriteRemoved);
+
+  @override
+  createState() => new FavoriteIconButtonState();
+}
+
+class FavoriteIconButtonState extends State<FavoriteIconButton> {
+  @override
+  Widget build(BuildContext context) {
+    return new Container(
+        child: new IconButton(
+            icon: (widget._isFavorited
+                ? new Icon(Icons.favorite)
+                : new Icon(Icons.favorite_border)),
+            onPressed: _toggle));
   }
 
-  loadData() async {
-    String status;
-    List<dom.Element> widgets = [];
-    try {
-      String dataUrl =
-          "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/pages/6337578441124076615?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA";
-      http.Response response = await http.get(dataUrl);
-      Map map = json.decode(response.body);
-      dom.Document document = parse(map["content"]);
-      widgets = document.querySelectorAll("ul li");
-      if (widgets == null || widgets.isEmpty) {
-        status = "No Content Found";
-        widgets = [];
-      }
-    } catch (exception) {
-      status = exception.toString();
+  void _toggle() async {
+    if (widget._isFavorited) {
+      await deleteFavorite(widget._model.urlPath);
+      widget._onFavoriteRemoved(widget._model);
+    } else {
+      await insertFavorite(widget._model);
+      widget._onFavoriteAdded(widget._model);
     }
-    setState(() {
-      loading = false;
-      this.status = status;
-      this.widgets = widgets;
-    });
-  }
-
-  Future<Null> _navigateToPostItem(Map<String, dynamic> message) async {
-    final PostItem item = _postItemForMessage(message);
-    // Clear away dialogs
-    Navigator.popUntil(context, (Route<dynamic> route) => route is PageRoute);
-    Navigator.push(
-        context,
-        new MaterialPageRoute(
-          builder: (context) => new PostPage(item.urlPath),
-        ));
-  }
-
-  bool _showLoadingDialog() {
-    return loading;
-  }
-
-  void _showPostItemDialog(Map<String, dynamic> message) {
-    showDialog<bool>(
-      context: context,
-      child: _buildDialog(context, _postItemForMessage(message)),
-    ).then((bool shouldNavigate) {
-      if (shouldNavigate == true) {
-        _navigateToPostItem(message);
-      }
-    });
-  }
-
-  bool _showStatus() {
-    return status != null;
   }
 }
 
@@ -357,7 +585,7 @@ class PostPageState extends State<PostPage> {
   @override
   void initState() {
     super.initState();
-    loadData();
+    _loadData();
   }
 
   @override
@@ -366,8 +594,38 @@ class PostPageState extends State<PostPage> {
       appBar: new AppBar(
         title: new Text('Cari Runners'),
       ),
-      body: getBody(),
+      body: _buildBody(),
     );
+  }
+
+  _buildBody() {
+    if (_showLoadingDialog()) {
+      return _buildProgressDialog();
+    } else if (_showStatus()) {
+      return _buildStatus();
+    } else {
+      return _buildListView();
+    }
+  }
+
+  _buildListView() {
+    return new ListView(
+      children: <Widget>[
+        new Container(
+            padding: new EdgeInsets.all(16.0),
+            child:
+                new Text(title, style: Theme.of(context).textTheme.headline)),
+        new ConstrainedBox(
+          constraints: new BoxConstraints(maxHeight: 300.0, maxWidth: 300.0),
+          child: new CachedNetworkImage(imageUrl: logo),
+        ),
+        new HtmlTextView(data: content)
+      ],
+    );
+  }
+
+  _buildProgressDialog() {
+    return new Center(child: new CircularProgressIndicator());
   }
 
   Widget _buildStatus() {
@@ -385,7 +643,7 @@ class PostPageState extends State<PostPage> {
               onPressed: () {
                 setState(() {
                   loading = true;
-                  loadData();
+                  _loadData();
                 });
               },
               child: new Text('RETRY'),
@@ -396,37 +654,7 @@ class PostPageState extends State<PostPage> {
     ));
   }
 
-  getBody() {
-    if (_showLoadingDialog()) {
-      return getProgressDialog();
-    } else if (_showStatus()) {
-      return _buildStatus();
-    } else {
-      return getListView();
-    }
-  }
-
-  getListView() {
-    return new ListView(
-      children: <Widget>[
-        new Container(
-            padding: new EdgeInsets.all(16.0),
-            child:
-                new Text(title, style: Theme.of(context).textTheme.headline)),
-        new ConstrainedBox(
-          constraints: new BoxConstraints(maxHeight: 300.0, maxWidth: 300.0),
-          child: new CachedNetworkImage(imageUrl: logo),
-        ),
-        new HtmlTextView(data: content)
-      ],
-    );
-  }
-
-  getProgressDialog() {
-    return new Center(child: new CircularProgressIndicator());
-  }
-
-  loadData() async {
+  _loadData() async {
     String status;
     String title;
     String logo;
