@@ -22,6 +22,7 @@ class RunApp extends StatelessWidget {
         title: 'Cari Runners',
         theme: new ThemeData(
           primarySwatch: Colors.blue,
+          accentColor: Colors.lightBlue,
         ),
         home: new MainPage());
   }
@@ -238,11 +239,16 @@ class HomeTabState extends State<HomeTab> {
     }
   }
 
-  ListView _buildListView(BuildContext context) => new ListView.builder(
-      itemCount: elementList.length,
-      itemBuilder: (context, position) {
-        return _buildListViewRow(context, position);
-      });
+  Widget _buildListView(BuildContext context) {
+    return new RefreshIndicator(
+      child: new ListView.builder(
+          itemCount: elementList.length,
+          itemBuilder: (context, position) {
+            return _buildListViewRow(context, position);
+          }),
+      onRefresh: _refresh,
+    );
+  }
 
   Widget _buildListViewRow(BuildContext context, int position) {
     String title = elementList[position].text;
@@ -317,6 +323,8 @@ class HomeTabState extends State<HomeTab> {
                   _loadData();
                 });
               },
+              textColor: Colors.white,
+              color: Colors.blue[600],
               child: new Text('RETRY'),
             ),
           ],
@@ -347,6 +355,10 @@ class HomeTabState extends State<HomeTab> {
       this.status = status;
       this.elementList = elementList;
     });
+  }
+
+  Future _refresh() async {
+    _loadData();
   }
 
   bool _showLoadingDialog() {
@@ -594,21 +606,21 @@ class PostPageState extends State<PostPage> {
       appBar: new AppBar(
         title: new Text('Cari Runners'),
       ),
-      body: _buildBody(),
+      body: _buildBody(context),
     );
   }
 
-  _buildBody() {
+  _buildBody(BuildContext context) {
     if (_showLoadingDialog()) {
       return _buildProgressDialog();
     } else if (_showStatus()) {
       return _buildStatus();
     } else {
-      return _buildListView();
+      return _buildListView(context);
     }
   }
 
-  _buildListView() {
+  _buildListView(BuildContext context) {
     return new ListView(
       children: <Widget>[
         new Container(
@@ -646,6 +658,8 @@ class PostPageState extends State<PostPage> {
                   _loadData();
                 });
               },
+              textColor: Colors.white,
+              color: Colors.blue[600],
               child: new Text('RETRY'),
             ),
           ],
