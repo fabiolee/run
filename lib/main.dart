@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_flux/flutter_flux.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
@@ -33,8 +34,9 @@ class MainPage extends StatefulWidget {
   createState() => new MainPageState();
 }
 
-class MainPageState extends State<MainPage> with TickerProviderStateMixin {
+class MainPageState extends State<MainPage> {
   final FirebaseMessaging _firebaseMessaging = new FirebaseMessaging();
+  final Action<bool> remoteIsDirtyAction = new Action<bool>();
   String status;
   List<FavoriteModel> favoriteList = [];
 
@@ -63,25 +65,35 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
             title: const Text('Settings'),
           ),
         ],
+        activeColor: Theme.of(context).primaryColor,
       ),
       tabBuilder: (BuildContext context, int index) {
         return new CupertinoTabView(
-          builder: (BuildContext context) {
-            switch (index) {
-              case 0:
-                return new HomeTab(
-                    favoriteList, _handleFavoriteAdded, _handleFavoriteRemoved);
-                break;
-              case 1:
-                return new FavoriteTab(status, favoriteList,
-                    _handleFavoriteAdded, _handleFavoriteRemoved);
-                break;
-              case 2:
-                return new SettingTab();
-                break;
-              default:
-                break;
+          onGenerateRoute: (RouteSettings settings) {
+            if (settings.name == '/') {
+              return new MaterialPageRoute<Null>(
+                settings: settings,
+                builder: (BuildContext context) {
+                  switch (index) {
+                    case 0:
+                      return new HomeTab(remoteIsDirtyAction, favoriteList,
+                          _handleFavoriteAdded, _handleFavoriteRemoved);
+                      break;
+                    case 1:
+                      return new FavoriteTab(status, favoriteList,
+                          _handleFavoriteAdded, _handleFavoriteRemoved);
+                      break;
+                    case 2:
+                      return new SettingTab();
+                      break;
+                    default:
+                      break;
+                  }
+                },
+                maintainState: true,
+              );
             }
+            return null;
           },
         );
       },
@@ -113,14 +125,17 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
       onMessage: (Map<String, dynamic> message) {
         print("onMessage: $message");
         _showPostItemDialog(message);
+        remoteIsDirtyAction(true);
       },
       onLaunch: (Map<String, dynamic> message) {
         print("onLaunch: $message");
         _navigateToPostItem(message);
+        remoteIsDirtyAction(true);
       },
       onResume: (Map<String, dynamic> message) {
         print("onResume: $message");
         _navigateToPostItem(message);
+        remoteIsDirtyAction(true);
       },
     );
     _firebaseMessaging.requestNotificationPermissions(
@@ -199,11 +214,13 @@ class MainPageState extends State<MainPage> with TickerProviderStateMixin {
 }
 
 class HomeTab extends StatefulWidget {
+  final Action<bool> remoteIsDirtyAction;
   final List<FavoriteModel> favoriteList;
   final ValueChanged<FavoriteModel> onFavoriteAdded;
   final ValueChanged<FavoriteModel> onFavoriteRemoved;
 
-  HomeTab(this.favoriteList, this.onFavoriteAdded, this.onFavoriteRemoved);
+  HomeTab(this.remoteIsDirtyAction, this.favoriteList, this.onFavoriteAdded,
+      this.onFavoriteRemoved);
 
   @override
   createState() => new HomeTabState();
@@ -218,6 +235,7 @@ class HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadData();
+    widget.remoteIsDirtyAction.listen(_handleRemoteIsDirty);
   }
 
   @override
@@ -240,14 +258,15 @@ class HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildListView(BuildContext context) {
-    return new RefreshIndicator(
+    return new Scrollbar(
+        child: new RefreshIndicator(
       child: new ListView.builder(
           itemCount: elementList.length,
           itemBuilder: (context, position) {
             return _buildListViewRow(context, position);
           }),
       onRefresh: _refresh,
-    );
+    ));
   }
 
   Widget _buildListViewRow(BuildContext context, int position) {
@@ -323,14 +342,21 @@ class HomeTabState extends State<HomeTab> {
                   _loadData();
                 });
               },
-              textColor: Colors.white,
-              color: Colors.blue[600],
               child: new Text('RETRY'),
             ),
           ],
         ),
       ),
     ));
+  }
+
+  void _handleRemoteIsDirty(bool remoteIsDirty) {
+    if (remoteIsDirty) {
+      setState(() {
+        loading = true;
+        _loadData();
+      });
+    }
   }
 
   _loadData() async {
@@ -401,11 +427,14 @@ class FavoriteTabState extends State<FavoriteTab> {
     }
   }
 
-  ListView _buildListView(BuildContext context) => new ListView.builder(
-      itemCount: widget.favoriteList.length,
-      itemBuilder: (context, position) {
-        return _buildListViewRow(context, position);
-      });
+  Widget _buildListView(BuildContext context) {
+    return new Scrollbar(
+        child: new ListView.builder(
+            itemCount: widget.favoriteList.length,
+            itemBuilder: (context, position) {
+              return _buildListViewRow(context, position);
+            }));
+  }
 
   Widget _buildListViewRow(BuildContext context, int position) {
     FavoriteModel model = widget.favoriteList[position];
@@ -658,8 +687,6 @@ class PostPageState extends State<PostPage> {
                   _loadData();
                 });
               },
-              textColor: Colors.white,
-              color: Colors.blue[600],
               child: new Text('RETRY'),
             ),
           ],
