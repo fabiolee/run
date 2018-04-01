@@ -102,7 +102,7 @@ class MainPageState extends State<MainPage> {
 
   Widget _buildDialog(BuildContext context, PostItem item) {
     return new AlertDialog(
-      content: new Text("New Run Available!"),
+      content: new Text(item.title),
       actions: <Widget>[
         new FlatButton(
           child: const Text('CLOSE'),
@@ -189,16 +189,28 @@ class MainPageState extends State<MainPage> {
     final PostItem item = _postItemForMessage(message);
     // Clear away dialogs
     Navigator.popUntil(context, (Route<dynamic> route) => route is PageRoute);
+    FavoriteModel model;
+    for (FavoriteModel favorite in favoriteList) {
+      if (favorite.urlPath == (item.urlPath)) {
+        model = favorite;
+        break;
+      }
+    }
+    if (model == null) {
+      model = new FavoriteModel(null, item.title, item.urlPath);
+    }
     Navigator.push(
         context,
         new MaterialPageRoute(
-          builder: (context) => new PostPage(item.urlPath),
+          builder: (context) => new PostPage(model, favoriteList,
+              _handleFavoriteAdded, _handleFavoriteRemoved),
         ));
   }
 
   PostItem _postItemForMessage(Map<String, dynamic> message) {
+    final String title = message['title'];
     final String urlPath = Uri.parse(message['url']).path;
-    return new PostItem(urlPath: urlPath);
+    return new PostItem(title: title, urlPath: urlPath);
   }
 
   void _showPostItemDialog(Map<String, dynamic> message) {
@@ -314,7 +326,8 @@ class HomeTabState extends State<HomeTab> {
         Navigator.push(
             context,
             new MaterialPageRoute(
-              builder: (context) => new PostPage(urlPath),
+              builder: (context) => new PostPage(model, widget.favoriteList,
+                  widget.onFavoriteAdded, widget.onFavoriteRemoved),
             ));
       },
     );
@@ -467,7 +480,8 @@ class FavoriteTabState extends State<FavoriteTab> {
         Navigator.push(
             context,
             new MaterialPageRoute(
-              builder: (context) => new PostPage(urlPath),
+              builder: (context) => new PostPage(model, widget.favoriteList,
+                  widget.onFavoriteAdded, widget.onFavoriteRemoved),
             ));
       },
     );
@@ -588,12 +602,11 @@ class FavoriteIconButton extends StatefulWidget {
 class FavoriteIconButtonState extends State<FavoriteIconButton> {
   @override
   Widget build(BuildContext context) {
-    return new Container(
-        child: new IconButton(
-            icon: (widget._isFavorited
-                ? new Icon(Icons.favorite)
-                : new Icon(Icons.favorite_border)),
-            onPressed: _toggle));
+    return new IconButton(
+        icon: (widget._isFavorited
+            ? new Icon(Icons.favorite)
+            : new Icon(Icons.favorite_border)),
+        onPressed: _toggle);
   }
 
   void _toggle() async {
@@ -608,9 +621,13 @@ class FavoriteIconButtonState extends State<FavoriteIconButton> {
 }
 
 class PostPage extends StatefulWidget {
-  final String urlPath;
+  final FavoriteModel _model;
+  final List<FavoriteModel> _favoriteList;
+  final ValueChanged<FavoriteModel> _onFavoriteAdded;
+  final ValueChanged<FavoriteModel> _onFavoriteRemoved;
 
-  PostPage(this.urlPath);
+  PostPage(this._model, this._favoriteList, this._onFavoriteAdded,
+      this._onFavoriteRemoved);
 
   @override
   createState() => new PostPageState();
@@ -631,9 +648,20 @@ class PostPageState extends State<PostPage> {
 
   @override
   Widget build(BuildContext context) {
+    bool isFavorited = false;
+    for (FavoriteModel favorite in widget._favoriteList) {
+      if (favorite.urlPath == (widget._model.urlPath)) {
+        isFavorited = true;
+        break;
+      }
+    }
     return new Scaffold(
       appBar: new AppBar(
-        title: new Text('Cari Runners'),
+        title: const Text('Cari Runners'),
+        actions: <Widget>[
+          new FavoriteIconButton(widget._model, isFavorited,
+              widget._onFavoriteAdded, widget._onFavoriteRemoved),
+        ],
       ),
       body: _buildBody(context),
     );
@@ -703,7 +731,7 @@ class PostPageState extends State<PostPage> {
     try {
       String dataUrl =
           "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/posts/bypath?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA&path=";
-      http.Response response = await http.get(dataUrl + widget.urlPath);
+      http.Response response = await http.get(dataUrl + widget._model.urlPath);
       Map map = json.decode(response.body);
       title = map["title"];
       dom.Document document = parse(map["content"]);
@@ -737,6 +765,8 @@ class PostPageState extends State<PostPage> {
 }
 
 class PostItem {
-  PostItem({this.urlPath});
+  final String title;
   final String urlPath;
+
+  PostItem({this.title, this.urlPath});
 }
