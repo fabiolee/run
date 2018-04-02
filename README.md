@@ -23,8 +23,8 @@ Create a `ios/Runner/GoogleService-Info.plist` files to include your own Firebas
 
 ### iOS
 
-![Page](art/Page.jpg)
-![Post](art/Post.jpg)
-![Favorites](art/Favorites.jpg)
-![Settings](art/Settings.jpg)
-![Push Notification](art/PushNotification.jpg)
+![Page](art/Page.png)
+![Post](art/Post.png)
+![Favorites](art/Favorites.png)
+![Settings](art/Settings.png)
+![Push Notification](art/PushNotification.png)
