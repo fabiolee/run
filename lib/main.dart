@@ -202,8 +202,8 @@ class MainPageState extends State<MainPage> {
     Navigator.push(
         context,
         new MaterialPageRoute(
-          builder: (context) => new PostPage(model, favoriteList,
-              _handleFavoriteAdded, _handleFavoriteRemoved),
+          builder: (context) => new FirebaseMessagingPostPage(model,
+              favoriteList, _handleFavoriteAdded, _handleFavoriteRemoved),
         ));
   }
 
@@ -761,6 +761,172 @@ class PostPageState extends State<PostPage> {
 
   bool _showStatus() {
     return status != null;
+  }
+}
+
+class FirebaseMessagingPostPage extends StatefulWidget {
+  final FavoriteModel _model;
+  final List<FavoriteModel> _favoriteList;
+  final ValueChanged<FavoriteModel> _onFavoriteAdded;
+  final ValueChanged<FavoriteModel> _onFavoriteRemoved;
+
+  FirebaseMessagingPostPage(this._model, this._favoriteList,
+      this._onFavoriteAdded, this._onFavoriteRemoved);
+
+  @override
+  createState() => new FirebaseMessagingPostPageState();
+}
+
+class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
+  bool isFavorited = false;
+  bool loading = true;
+  String status;
+  String title;
+  String logo;
+  String content;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFavorite();
+    _loadData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+      appBar: new AppBar(
+        title: const Text('Cari Runners'),
+        actions: <Widget>[
+          new IconButton(
+              icon: (isFavorited
+                  ? new Icon(Icons.favorite)
+                  : new Icon(Icons.favorite_border)),
+              onPressed: _toggle)
+        ],
+      ),
+      body: _buildBody(context),
+    );
+  }
+
+  _buildBody(BuildContext context) {
+    if (_showLoadingDialog()) {
+      return _buildProgressDialog();
+    } else if (_showStatus()) {
+      return _buildStatus();
+    } else {
+      return _buildListView(context);
+    }
+  }
+
+  _buildListView(BuildContext context) {
+    return new ListView(
+      children: <Widget>[
+        new Container(
+            padding: new EdgeInsets.all(16.0),
+            child:
+                new Text(title, style: Theme.of(context).textTheme.headline)),
+        new ConstrainedBox(
+          constraints: new BoxConstraints(maxHeight: 300.0, maxWidth: 300.0),
+          child: new CachedNetworkImage(imageUrl: logo),
+        ),
+        new HtmlTextView(data: content)
+      ],
+    );
+  }
+
+  _buildProgressDialog() {
+    return new Center(child: new CircularProgressIndicator());
+  }
+
+  Widget _buildStatus() {
+    var spacer = new SizedBox(height: 32.0);
+    return new Container(
+        child: new Padding(
+      padding: new EdgeInsets.all(16.0),
+      child: new Center(
+        child: new Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            new Text(status),
+            spacer,
+            new RaisedButton(
+              onPressed: () {
+                setState(() {
+                  loading = true;
+                  _loadData();
+                });
+              },
+              child: new Text('RETRY'),
+            ),
+          ],
+        ),
+      ),
+    ));
+  }
+
+  void _initFavorite() {
+    for (FavoriteModel favorite in widget._favoriteList) {
+      if (favorite.urlPath == (widget._model.urlPath)) {
+        setState(() {
+          isFavorited = true;
+        });
+        break;
+      }
+    }
+  }
+
+  _loadData() async {
+    String status;
+    String title;
+    String logo;
+    String content;
+    try {
+      String dataUrl =
+          "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/posts/bypath?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA&path=";
+      http.Response response = await http.get(dataUrl + widget._model.urlPath);
+      Map map = json.decode(response.body);
+      title = map["title"];
+      dom.Document document = parse(map["content"]);
+      dom.Element firstElement = document.querySelector("div");
+      dom.Element imgElement = firstElement.querySelector("img");
+      logo = imgElement.attributes["src"];
+      firstElement.remove();
+      content = document.body.innerHtml;
+      if (title == null || logo == null || content == null) {
+        status = "No Content Found";
+      }
+    } catch (exception) {
+      status = exception.toString();
+    }
+    setState(() {
+      loading = false;
+      this.status = status;
+      this.title = title;
+      this.logo = logo;
+      this.content = content;
+    });
+  }
+
+  _showLoadingDialog() {
+    return loading;
+  }
+
+  bool _showStatus() {
+    return status != null;
+  }
+
+  void _toggle() async {
+    if (isFavorited) {
+      await deleteFavorite(widget._model.urlPath);
+      widget._onFavoriteRemoved(widget._model);
+    } else {
+      await insertFavorite(widget._model);
+      widget._onFavoriteAdded(widget._model);
+    }
+    setState(() {
+      isFavorited = !isFavorited;
+    });
   }
 }
 
