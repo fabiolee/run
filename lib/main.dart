@@ -396,7 +396,7 @@ class HomeTabState extends State<HomeTab> {
     });
   }
 
-  Future _refresh() async {
+  Future<Null> _refresh() async {
     _loadData();
   }
 
