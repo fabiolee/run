@@ -239,6 +239,11 @@ class HomeTab extends StatefulWidget {
 }
 
 class HomeTabState extends State<HomeTab> {
+  Icon appBarActionIcon = new Icon(Icons.search);
+  Widget appBarTitle = new Text('Cari Runners');
+  TextEditingController searchQuery = new TextEditingController();
+  String searchText = "";
+  bool searching;
   bool loading = true;
   String status;
   List<dom.Element> elementList = [];
@@ -246,6 +251,7 @@ class HomeTabState extends State<HomeTab> {
   @override
   void initState() {
     super.initState();
+    _init();
     _loadData();
     widget.remoteIsDirtyAction.listen(_handleRemoteIsDirty);
   }
@@ -253,10 +259,36 @@ class HomeTabState extends State<HomeTab> {
   @override
   Widget build(BuildContext context) {
     return new Scaffold(
-        appBar: new AppBar(
-          title: new Text('Cari Runners'),
-        ),
-        body: _buildBody(context));
+        appBar: _buildAppBar(context), body: _buildBody(context));
+  }
+
+  Widget _buildAppBar(BuildContext context) {
+    return new AppBar(title: appBarTitle, actions: <Widget>[
+      new IconButton(
+        icon: appBarActionIcon,
+        onPressed: () {
+          setState(() {
+            if (this.appBarActionIcon.icon == Icons.search) {
+              this.appBarActionIcon = new Icon(Icons.close);
+              this.appBarTitle = new TextField(
+                controller: searchQuery,
+                style: new TextStyle(
+                  color: Colors.white,
+                ),
+                decoration: new InputDecoration(
+                  prefixIcon: new Icon(Icons.search, color: Colors.white),
+                  hintText: "Search",
+                  hintStyle: new TextStyle(color: Colors.white30),
+                ),
+              );
+              _handleSearchStart();
+            } else {
+              _handleSearchEnd();
+            }
+          });
+        },
+      ),
+    ]);
   }
 
   Widget _buildBody(BuildContext context) {
@@ -265,26 +297,38 @@ class HomeTabState extends State<HomeTab> {
     } else if (_showStatus()) {
       return _buildStatus();
     } else {
-      return _buildListView(context);
+      return searching
+          ? _buildSearchList(context)
+          : _buildListView(context, true, elementList);
     }
   }
 
-  Widget _buildListView(BuildContext context) {
-    return new Scrollbar(
-        child: new RefreshIndicator(
-      child: new ListView.builder(
-          itemCount: elementList.length,
+  Widget _buildListView(
+      BuildContext context, bool allowRefresh, List<dom.Element> itemList) {
+    if (allowRefresh) {
+      return new Scrollbar(
+          child: new RefreshIndicator(
+        child: new ListView.builder(
+            itemCount: itemList.length,
+            itemBuilder: (context, position) {
+              return _buildListViewRow(context, position, itemList);
+            }),
+        onRefresh: _refresh,
+      ));
+    } else {
+      return new ListView.builder(
+          itemCount: itemList.length,
           itemBuilder: (context, position) {
-            return _buildListViewRow(context, position);
-          }),
-      onRefresh: _refresh,
-    ));
+            return _buildListViewRow(context, position, itemList);
+          });
+    }
   }
 
-  Widget _buildListViewRow(BuildContext context, int position) {
-    String title = elementList[position].text;
+  Widget _buildListViewRow(
+      BuildContext context, int position, List<dom.Element> itemList) {
+    String title = itemList[position].text;
     String urlPath = Uri
-        .parse(elementList[position].querySelector("a").attributes["href"])
+        .parse(itemList[position].querySelector("a").attributes["href"])
         .path;
     FavoriteModel model;
     bool isFavorited = false;
@@ -337,6 +381,21 @@ class HomeTabState extends State<HomeTab> {
     return new Center(child: new CircularProgressIndicator());
   }
 
+  Widget _buildSearchList(BuildContext context) {
+    if (searchText.isEmpty) {
+      return _buildListView(context, false, elementList);
+    } else {
+      List<dom.Element> searchList = List();
+      for (int i = 0; i < elementList.length; i++) {
+        String title = elementList[i].text;
+        if (title.toLowerCase().contains(searchText.toLowerCase())) {
+          searchList.add(elementList[i]);
+        }
+      }
+      return _buildListView(context, false, searchList);
+    }
+  }
+
   Widget _buildStatus() {
     var spacer = new SizedBox(height: 32.0);
     return new Container(
@@ -370,6 +429,38 @@ class HomeTabState extends State<HomeTab> {
         _loadData();
       });
     }
+  }
+
+  void _handleSearchStart() {
+    setState(() {
+      searching = true;
+    });
+  }
+
+  void _handleSearchEnd() {
+    setState(() {
+      this.appBarActionIcon = new Icon(Icons.search);
+      this.appBarTitle = new Text("Cari Runners");
+      searchQuery.clear();
+      searching = false;
+    });
+  }
+
+  _init() {
+    searching = false;
+    searchQuery.addListener(() {
+      if (searchQuery.text.isEmpty) {
+        setState(() {
+          searching = false;
+          searchText = "";
+        });
+      } else {
+        setState(() {
+          searching = true;
+          searchText = searchQuery.text;
+        });
+      }
+    });
   }
 
   _loadData() async {
