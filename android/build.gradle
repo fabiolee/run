@@ -7,7 +7,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.0.1'
+        classpath 'com.android.tools.build:gradle:3.1.4'
         classpath 'com.google.gms:google-services:3.2.0' // google-services plugin
         classpath 'io.fabric.tools:gradle:1.+'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -15,11 +15,12 @@ buildscript {
 }
 
 ext {
-    compileSdkVersion = 27
-    buildToolsVersion = "27.0.2"
+    compileSdkVersion = 28
+    buildToolsVersion = "28.0.2"
     minSdkVersion = 16
-    versionCode = 11
-    versionName = "1.0.8"
+    targetSdkVersion = 28
+    versionCode = 14
+    versionName = "1.1.0"
 
     fabric_crashlytics_version = "2.9.1"
 }
