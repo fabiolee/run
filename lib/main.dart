@@ -12,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'package:package_info/package_info.dart';
 
 import 'database.dart';
+import 'favorite_icon_button.dart';
+import 'home_tab.dart';
 import 'html_text_view.dart';
 
 void main() => runApp(new RunApp());
@@ -239,19 +241,14 @@ class HomeTab extends StatefulWidget {
 }
 
 class HomeTabState extends State<HomeTab> {
-  Icon appBarActionIcon = new Icon(Icons.search);
-  Widget appBarTitle = new Text('Cari Runners');
-  TextEditingController searchQuery = new TextEditingController();
-  String searchText = "";
-  bool searching;
   bool loading = true;
   String status;
   List<dom.Element> elementList = [];
+  HomeTabSearchDelegate delegate;
 
   @override
   void initState() {
     super.initState();
-    _init();
     _loadData();
     widget.remoteIsDirtyAction.listen(_handleRemoteIsDirty);
   }
@@ -263,31 +260,29 @@ class HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    return new AppBar(title: appBarTitle, actions: <Widget>[
-      new IconButton(
-        icon: appBarActionIcon,
-        onPressed: () {
-          setState(() {
-            if (this.appBarActionIcon.icon == Icons.search) {
-              this.appBarActionIcon = new Icon(Icons.close);
-              this.appBarTitle = new TextField(
-                controller: searchQuery,
-                style: new TextStyle(
-                  color: Colors.white,
-                ),
-                decoration: new InputDecoration(
-                  prefixIcon: new Icon(Icons.search, color: Colors.white),
-                  hintText: "Search",
-                  hintStyle: new TextStyle(color: Colors.white30),
-                ),
-              );
-              _handleSearchStart();
-            } else {
-              _handleSearchEnd();
-            }
-          });
-        },
-      ),
+    return new AppBar(title: const Text("Cari Runners"), actions: <Widget>[
+      loading
+          ? const Icon(null)
+          : new IconButton(
+              tooltip: 'Search',
+              icon: const Icon(Icons.search),
+              onPressed: () async {
+                final dom.Element selected = await showSearch<dom.Element>(
+                    context: context, delegate: delegate);
+                if (selected != null) {
+                  FavoriteModel model = _getFavoriteModel(selected);
+                  Navigator.push(
+                      context,
+                      new MaterialPageRoute(
+                        builder: (context) => new PostPage(
+                            model,
+                            widget.favoriteList,
+                            widget.onFavoriteAdded,
+                            widget.onFavoriteRemoved),
+                      ));
+                }
+              },
+            ),
     ]);
   }
 
@@ -297,31 +292,20 @@ class HomeTabState extends State<HomeTab> {
     } else if (_showStatus()) {
       return _buildStatus();
     } else {
-      return searching
-          ? _buildSearchList(context)
-          : _buildListView(context, true, elementList);
+      return _buildListView(context, elementList);
     }
   }
 
-  Widget _buildListView(
-      BuildContext context, bool allowRefresh, List<dom.Element> itemList) {
-    if (allowRefresh) {
-      return new Scrollbar(
-          child: new RefreshIndicator(
-        child: new ListView.builder(
-            itemCount: itemList.length,
-            itemBuilder: (context, position) {
-              return _buildListViewRow(context, position, itemList);
-            }),
-        onRefresh: _refresh,
-      ));
-    } else {
-      return new ListView.builder(
+  Widget _buildListView(BuildContext context, List<dom.Element> itemList) {
+    return new Scrollbar(
+        child: new RefreshIndicator(
+      child: new ListView.builder(
           itemCount: itemList.length,
           itemBuilder: (context, position) {
             return _buildListViewRow(context, position, itemList);
-          });
-    }
+          }),
+      onRefresh: _refresh,
+    ));
   }
 
   Widget _buildListViewRow(
@@ -381,21 +365,6 @@ class HomeTabState extends State<HomeTab> {
     return new Center(child: new CircularProgressIndicator());
   }
 
-  Widget _buildSearchList(BuildContext context) {
-    if (searchText.isEmpty) {
-      return _buildListView(context, false, elementList);
-    } else {
-      List<dom.Element> searchList = List();
-      for (int i = 0; i < elementList.length; i++) {
-        String title = elementList[i].text;
-        if (title.toLowerCase().contains(searchText.toLowerCase())) {
-          searchList.add(elementList[i]);
-        }
-      }
-      return _buildListView(context, false, searchList);
-    }
-  }
-
   Widget _buildStatus() {
     var spacer = new SizedBox(height: 32.0);
     return new Container(
@@ -422,6 +391,24 @@ class HomeTabState extends State<HomeTab> {
     ));
   }
 
+  FavoriteModel _getFavoriteModel(dom.Element item) {
+    String title = item.text;
+    String urlPath = Uri.parse(item.querySelector("a").attributes["href"]).path;
+    FavoriteModel model;
+    bool isFavorited = false;
+    for (FavoriteModel favorite in widget.favoriteList) {
+      if (favorite.urlPath == (urlPath)) {
+        model = favorite;
+        isFavorited = true;
+        break;
+      }
+    }
+    if (model == null) {
+      model = new FavoriteModel(null, title, urlPath);
+    }
+    return model;
+  }
+
   void _handleRemoteIsDirty(bool remoteIsDirty) {
     if (remoteIsDirty) {
       setState(() {
@@ -429,38 +416,6 @@ class HomeTabState extends State<HomeTab> {
         _loadData();
       });
     }
-  }
-
-  void _handleSearchStart() {
-    setState(() {
-      searching = true;
-    });
-  }
-
-  void _handleSearchEnd() {
-    setState(() {
-      this.appBarActionIcon = new Icon(Icons.search);
-      this.appBarTitle = new Text("Cari Runners");
-      searchQuery.clear();
-      searching = false;
-    });
-  }
-
-  _init() {
-    searching = false;
-    searchQuery.addListener(() {
-      if (searchQuery.text.isEmpty) {
-        setState(() {
-          searching = false;
-          searchText = "";
-        });
-      } else {
-        setState(() {
-          searching = true;
-          searchText = searchQuery.text;
-        });
-      }
-    });
   }
 
   _loadData() async {
@@ -484,6 +439,7 @@ class HomeTabState extends State<HomeTab> {
       this.loading = false;
       this.status = status;
       this.elementList = elementList;
+      this.delegate = new HomeTabSearchDelegate(data: elementList, history: []);
     });
   }
 
@@ -674,40 +630,6 @@ class SettingTabState extends State<SettingTab> {
     setState(() {
       _packageInfo = info;
     });
-  }
-}
-
-class FavoriteIconButton extends StatefulWidget {
-  final FavoriteModel _model;
-  final bool _isFavorited;
-  final ValueChanged<FavoriteModel> _onFavoriteAdded;
-  final ValueChanged<FavoriteModel> _onFavoriteRemoved;
-
-  FavoriteIconButton(this._model, this._isFavorited, this._onFavoriteAdded,
-      this._onFavoriteRemoved);
-
-  @override
-  createState() => new FavoriteIconButtonState();
-}
-
-class FavoriteIconButtonState extends State<FavoriteIconButton> {
-  @override
-  Widget build(BuildContext context) {
-    return new IconButton(
-        icon: (widget._isFavorited
-            ? new Icon(Icons.favorite)
-            : new Icon(Icons.favorite_border)),
-        onPressed: _toggle);
-  }
-
-  void _toggle() async {
-    if (widget._isFavorited) {
-      await deleteFavorite(widget._model.urlPath);
-      widget._onFavoriteRemoved(widget._model);
-    } else {
-      await insertFavorite(widget._model);
-      widget._onFavoriteAdded(widget._model);
-    }
   }
 }
 
