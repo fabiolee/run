@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,8 @@ import 'html_text_view.dart';
 void main() => runApp(new RunApp());
 
 class RunApp extends StatelessWidget {
+  static FirebaseAnalytics analytics = new FirebaseAnalytics();
+
   @override
   Widget build(BuildContext context) {
     return new MaterialApp(
@@ -27,16 +30,23 @@ class RunApp extends StatelessWidget {
           primarySwatch: Colors.blue,
           accentColor: Colors.lightBlue,
         ),
-        home: new MainPage());
+        home: new MainPage(analytics: analytics));
   }
 }
 
 class MainPage extends StatefulWidget {
+  MainPage({Key key, this.analytics}) : super(key: key);
+
+  final FirebaseAnalytics analytics;
+
   @override
-  createState() => new MainPageState();
+  createState() => new _MainPageState(analytics);
 }
 
-class MainPageState extends State<MainPage> {
+class _MainPageState extends State<MainPage> {
+  _MainPageState(this.analytics);
+
+  final FirebaseAnalytics analytics;
   final FirebaseMessaging _firebaseMessaging = new FirebaseMessaging();
   final Action<bool> remoteIsDirtyAction = new Action<bool>();
   String status;
@@ -78,12 +88,20 @@ class MainPageState extends State<MainPage> {
                 builder: (BuildContext context) {
                   switch (index) {
                     case 0:
-                      return new HomeTab(remoteIsDirtyAction, favoriteList,
-                          _handleFavoriteAdded, _handleFavoriteRemoved);
+                      return new HomeTab(
+                          analytics: analytics,
+                          remoteIsDirtyAction: remoteIsDirtyAction,
+                          favoriteList: favoriteList,
+                          onFavoriteAdded: _handleFavoriteAdded,
+                          onFavoriteRemoved: _handleFavoriteRemoved);
                       break;
                     case 1:
-                      return new FavoriteTab(status, favoriteList,
-                          _handleFavoriteAdded, _handleFavoriteRemoved);
+                      return new FavoriteTab(
+                          analytics: analytics,
+                          status: status,
+                          favoriteList: favoriteList,
+                          onFavoriteAdded: _handleFavoriteAdded,
+                          onFavoriteRemoved: _handleFavoriteRemoved);
                       break;
                     case 2:
                       return new SettingTab();
@@ -125,17 +143,17 @@ class MainPageState extends State<MainPage> {
   void _configureFirebaseMessaging() {
     _firebaseMessaging.configure(
       onMessage: (Map<String, dynamic> message) {
-        print("onMessage: $message");
+        debugPrint("onMessage: $message");
         _showPostItemDialog(message);
         remoteIsDirtyAction(true);
       },
       onLaunch: (Map<String, dynamic> message) {
-        print("onLaunch: $message");
+        debugPrint("onLaunch: $message");
         _navigateToPostItem(message);
         remoteIsDirtyAction(true);
       },
       onResume: (Map<String, dynamic> message) {
-        print("onResume: $message");
+        debugPrint("onResume: $message");
         _navigateToPostItem(message);
         remoteIsDirtyAction(true);
       },
@@ -144,11 +162,11 @@ class MainPageState extends State<MainPage> {
         const IosNotificationSettings(sound: true, badge: true, alert: true));
     _firebaseMessaging.onIosSettingsRegistered
         .listen((IosNotificationSettings settings) {
-      print("Settings registered: $settings");
+      debugPrint("Settings registered: $settings");
     });
     _firebaseMessaging.getToken().then((String token) {
       assert(token != null);
-      print("Push Messaging token: $token");
+      debugPrint("Push Messaging token: $token");
     });
   }
 
@@ -204,8 +222,12 @@ class MainPageState extends State<MainPage> {
     Navigator.push(
         context,
         new MaterialPageRoute(
-          builder: (context) => new FirebaseMessagingPostPage(model,
-              favoriteList, _handleFavoriteAdded, _handleFavoriteRemoved),
+          builder: (context) => new FirebaseMessagingPostPage(
+              analytics: analytics,
+              model: model,
+              favoriteList: favoriteList,
+              onFavoriteAdded: _handleFavoriteAdded,
+              onFavoriteRemoved: _handleFavoriteRemoved),
         ));
   }
 
@@ -228,19 +250,29 @@ class MainPageState extends State<MainPage> {
 }
 
 class HomeTab extends StatefulWidget {
+  HomeTab(
+      {Key key,
+      this.analytics,
+      this.remoteIsDirtyAction,
+      this.favoriteList,
+      this.onFavoriteAdded,
+      this.onFavoriteRemoved})
+      : super(key: key);
+
+  final FirebaseAnalytics analytics;
   final Action<bool> remoteIsDirtyAction;
   final List<FavoriteModel> favoriteList;
   final ValueChanged<FavoriteModel> onFavoriteAdded;
   final ValueChanged<FavoriteModel> onFavoriteRemoved;
 
-  HomeTab(this.remoteIsDirtyAction, this.favoriteList, this.onFavoriteAdded,
-      this.onFavoriteRemoved);
-
   @override
-  createState() => new HomeTabState();
+  createState() => new _HomeTabState(analytics);
 }
 
-class HomeTabState extends State<HomeTab> {
+class _HomeTabState extends State<HomeTab> {
+  _HomeTabState(this.analytics);
+
+  final FirebaseAnalytics analytics;
   bool loading = true;
   String status;
   List<dom.Element> elementList = [];
@@ -275,10 +307,11 @@ class HomeTabState extends State<HomeTab> {
                       context,
                       new MaterialPageRoute(
                         builder: (context) => new PostPage(
-                            model,
-                            widget.favoriteList,
-                            widget.onFavoriteAdded,
-                            widget.onFavoriteRemoved),
+                            analytics: analytics,
+                            model: model,
+                            favoriteList: widget.favoriteList,
+                            onFavoriteAdded: widget.onFavoriteAdded,
+                            onFavoriteRemoved: widget.onFavoriteRemoved),
                       ));
                 }
               },
@@ -354,8 +387,12 @@ class HomeTabState extends State<HomeTab> {
         Navigator.push(
             context,
             new MaterialPageRoute(
-              builder: (context) => new PostPage(model, widget.favoriteList,
-                  widget.onFavoriteAdded, widget.onFavoriteRemoved),
+              builder: (context) => new PostPage(
+                  analytics: analytics,
+                  model: model,
+                  favoriteList: widget.favoriteList,
+                  onFavoriteAdded: widget.onFavoriteAdded,
+                  onFavoriteRemoved: widget.onFavoriteRemoved),
             ));
       },
     );
@@ -457,19 +494,30 @@ class HomeTabState extends State<HomeTab> {
 }
 
 class FavoriteTab extends StatefulWidget {
+  FavoriteTab(
+      {Key key,
+      this.analytics,
+      this.status,
+      this.favoriteList,
+      this.onFavoriteAdded,
+      this.onFavoriteRemoved})
+      : super(key: key);
+
+  final FirebaseAnalytics analytics;
   final String status;
   final List<FavoriteModel> favoriteList;
   final ValueChanged<FavoriteModel> onFavoriteAdded;
   final ValueChanged<FavoriteModel> onFavoriteRemoved;
 
-  FavoriteTab(this.status, this.favoriteList, this.onFavoriteAdded,
-      this.onFavoriteRemoved);
-
   @override
-  createState() => new FavoriteTabState();
+  createState() => new _FavoriteTabState(analytics);
 }
 
-class FavoriteTabState extends State<FavoriteTab> {
+class _FavoriteTabState extends State<FavoriteTab> {
+  _FavoriteTabState(this.analytics);
+
+  final FirebaseAnalytics analytics;
+
   @override
   Widget build(BuildContext context) {
     return new Scaffold(
@@ -527,8 +575,12 @@ class FavoriteTabState extends State<FavoriteTab> {
         Navigator.push(
             context,
             new MaterialPageRoute(
-              builder: (context) => new PostPage(model, widget.favoriteList,
-                  widget.onFavoriteAdded, widget.onFavoriteRemoved),
+              builder: (context) => new PostPage(
+                  analytics: analytics,
+                  model: model,
+                  favoriteList: widget.favoriteList,
+                  onFavoriteAdded: widget.onFavoriteAdded,
+                  onFavoriteRemoved: widget.onFavoriteRemoved),
             ));
       },
     );
@@ -634,19 +686,29 @@ class SettingTabState extends State<SettingTab> {
 }
 
 class PostPage extends StatefulWidget {
-  final FavoriteModel _model;
-  final List<FavoriteModel> _favoriteList;
-  final ValueChanged<FavoriteModel> _onFavoriteAdded;
-  final ValueChanged<FavoriteModel> _onFavoriteRemoved;
+  PostPage(
+      {Key key,
+      this.analytics,
+      this.model,
+      this.favoriteList,
+      this.onFavoriteAdded,
+      this.onFavoriteRemoved})
+      : super(key: key);
 
-  PostPage(this._model, this._favoriteList, this._onFavoriteAdded,
-      this._onFavoriteRemoved);
+  final FirebaseAnalytics analytics;
+  final FavoriteModel model;
+  final List<FavoriteModel> favoriteList;
+  final ValueChanged<FavoriteModel> onFavoriteAdded;
+  final ValueChanged<FavoriteModel> onFavoriteRemoved;
 
   @override
-  createState() => new PostPageState();
+  createState() => new _PostPageState(analytics);
 }
 
-class PostPageState extends State<PostPage> {
+class _PostPageState extends State<PostPage> {
+  _PostPageState(this.analytics);
+
+  final FirebaseAnalytics analytics;
   bool loading = true;
   String status;
   String title;
@@ -662,8 +724,8 @@ class PostPageState extends State<PostPage> {
   @override
   Widget build(BuildContext context) {
     bool isFavorited = false;
-    for (FavoriteModel favorite in widget._favoriteList) {
-      if (favorite.urlPath == (widget._model.urlPath)) {
+    for (FavoriteModel favorite in widget.favoriteList) {
+      if (favorite.urlPath == (widget.model.urlPath)) {
         isFavorited = true;
         break;
       }
@@ -672,8 +734,8 @@ class PostPageState extends State<PostPage> {
       appBar: new AppBar(
         title: const Text('Cari Runners'),
         actions: <Widget>[
-          new FavoriteIconButton(widget._model, isFavorited,
-              widget._onFavoriteAdded, widget._onFavoriteRemoved),
+          new FavoriteIconButton(widget.model, isFavorited,
+              widget.onFavoriteAdded, widget.onFavoriteRemoved),
         ],
       ),
       body: _buildBody(context),
@@ -744,7 +806,7 @@ class PostPageState extends State<PostPage> {
     try {
       String dataUrl =
           "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/posts/bypath?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA&path=";
-      http.Response response = await http.get(dataUrl + widget._model.urlPath);
+      http.Response response = await http.get(dataUrl + widget.model.urlPath);
       Map map = json.decode(response.body);
       title = map["title"];
       dom.Document document = parse(map["content"]);
@@ -755,6 +817,40 @@ class PostPageState extends State<PostPage> {
       content = document.body.innerHtml;
       if (title == null || logo == null || content == null) {
         status = "No Content Found";
+      }
+      List<String> northernList = ["perlis", "kedah", "penang", "perak"];
+      List<String> eastCoastList = ["kelantan", "terengganu", "pahang"];
+      List<String> centralList = ["selangor", "kuala lumpur", "putrajaya"];
+      List<String> southernList = ["negeri sembilan", "melaka", "johor"];
+      List<String> eastMalaysiaList = ["sarawak", "sabah", "labuan"];
+      List<String> labels = List.from(map["labels"]);
+      if (labels != null && labels.isNotEmpty) {
+        String eventName = "view_item";
+        loop:
+        for (String label in labels) {
+          if (northernList.any((location) => location.contains(label))) {
+            eventName += "_northern";
+            break loop;
+          } else if (eastCoastList
+              .any((location) => location.contains(label))) {
+            eventName += "_eastcoast";
+            break loop;
+          } else if (centralList.any((location) => location.contains(label))) {
+            eventName += "_central";
+            break loop;
+          } else if (southernList.any((location) => location.contains(label))) {
+            eventName += "_southern";
+            break loop;
+          } else if (eastMalaysiaList
+              .any((location) => location.contains(label))) {
+            eventName += "_eastmalaysia";
+            break loop;
+          }
+        }
+        Map<String, dynamic> parameters = {
+          'item_category': labels.toString(),
+        };
+        _sendAnalyticsEvent(eventName, parameters);
       }
     } catch (exception) {
       status = exception.toString();
@@ -768,6 +864,15 @@ class PostPageState extends State<PostPage> {
     });
   }
 
+  Future<Null> _sendAnalyticsEvent(
+      String name, Map<String, dynamic> parameters) async {
+    await analytics.logEvent(
+      name: name,
+      parameters: parameters,
+    );
+    debugPrint('logEvent(name: $name, parameters: $parameters)');
+  }
+
   _showLoadingDialog() {
     return loading;
   }
@@ -778,19 +883,29 @@ class PostPageState extends State<PostPage> {
 }
 
 class FirebaseMessagingPostPage extends StatefulWidget {
-  final FavoriteModel _model;
-  final List<FavoriteModel> _favoriteList;
-  final ValueChanged<FavoriteModel> _onFavoriteAdded;
-  final ValueChanged<FavoriteModel> _onFavoriteRemoved;
+  FirebaseMessagingPostPage(
+      {Key key,
+      this.analytics,
+      this.model,
+      this.favoriteList,
+      this.onFavoriteAdded,
+      this.onFavoriteRemoved})
+      : super(key: key);
 
-  FirebaseMessagingPostPage(this._model, this._favoriteList,
-      this._onFavoriteAdded, this._onFavoriteRemoved);
+  final FirebaseAnalytics analytics;
+  final FavoriteModel model;
+  final List<FavoriteModel> favoriteList;
+  final ValueChanged<FavoriteModel> onFavoriteAdded;
+  final ValueChanged<FavoriteModel> onFavoriteRemoved;
 
   @override
-  createState() => new FirebaseMessagingPostPageState();
+  createState() => new _FirebaseMessagingPostPageState(analytics);
 }
 
-class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
+class _FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
+  _FirebaseMessagingPostPageState(this.analytics);
+
+  final FirebaseAnalytics analytics;
   bool isFavorited = false;
   bool loading = true;
   String status;
@@ -879,8 +994,8 @@ class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
   }
 
   void _initFavorite() {
-    for (FavoriteModel favorite in widget._favoriteList) {
-      if (favorite.urlPath == (widget._model.urlPath)) {
+    for (FavoriteModel favorite in widget.favoriteList) {
+      if (favorite.urlPath == (widget.model.urlPath)) {
         setState(() {
           isFavorited = true;
         });
@@ -897,7 +1012,7 @@ class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
     try {
       String dataUrl =
           "https://www.googleapis.com/blogger/v3/blogs/9027509069015616506/posts/bypath?key=AIzaSyDGktXyn4O-hKkVkVFna7NQOrEOxfcwqTA&path=";
-      http.Response response = await http.get(dataUrl + widget._model.urlPath);
+      http.Response response = await http.get(dataUrl + widget.model.urlPath);
       Map map = json.decode(response.body);
       title = map["title"];
       dom.Document document = parse(map["content"]);
@@ -908,6 +1023,40 @@ class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
       content = document.body.innerHtml;
       if (title == null || logo == null || content == null) {
         status = "No Content Found";
+      }
+      List<String> northernList = ["perlis", "kedah", "penang", "perak"];
+      List<String> eastCoastList = ["kelantan", "terengganu", "pahang"];
+      List<String> centralList = ["selangor", "kuala lumpur", "putrajaya"];
+      List<String> southernList = ["negeri sembilan", "melaka", "johor"];
+      List<String> eastMalaysiaList = ["sarawak", "sabah", "labuan"];
+      List<String> labels = List.from(map["labels"]);
+      if (labels != null && labels.isNotEmpty) {
+        String eventName = "view_item";
+        loop:
+        for (String label in labels) {
+          if (northernList.any((location) => location.contains(label))) {
+            eventName += "_northern";
+            break loop;
+          } else if (eastCoastList
+              .any((location) => location.contains(label))) {
+            eventName += "_eastcoast";
+            break loop;
+          } else if (centralList.any((location) => location.contains(label))) {
+            eventName += "_central";
+            break loop;
+          } else if (southernList.any((location) => location.contains(label))) {
+            eventName += "_southern";
+            break loop;
+          } else if (eastMalaysiaList
+              .any((location) => location.contains(label))) {
+            eventName += "_eastmalaysia";
+            break loop;
+          }
+        }
+        Map<String, dynamic> parameters = {
+          'item_category': labels.toString(),
+        };
+        _sendAnalyticsEvent(eventName, parameters);
       }
     } catch (exception) {
       status = exception.toString();
@@ -921,6 +1070,15 @@ class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
     });
   }
 
+  Future<Null> _sendAnalyticsEvent(
+      String name, Map<String, dynamic> parameters) async {
+    await analytics.logEvent(
+      name: name,
+      parameters: parameters,
+    );
+    debugPrint('logEvent(name: $name, parameters: $parameters)');
+  }
+
   _showLoadingDialog() {
     return loading;
   }
@@ -931,11 +1089,11 @@ class FirebaseMessagingPostPageState extends State<FirebaseMessagingPostPage> {
 
   void _toggle() async {
     if (isFavorited) {
-      await deleteFavorite(widget._model.urlPath);
-      widget._onFavoriteRemoved(widget._model);
+      await deleteFavorite(widget.model.urlPath);
+      widget.onFavoriteRemoved(widget.model);
     } else {
-      await insertFavorite(widget._model);
-      widget._onFavoriteAdded(widget._model);
+      await insertFavorite(widget.model);
+      widget.onFavoriteAdded(widget.model);
     }
     setState(() {
       isFavorited = !isFavorited;
