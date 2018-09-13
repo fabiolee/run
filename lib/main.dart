@@ -232,8 +232,17 @@ class _MainPageState extends State<MainPage> {
   }
 
   PostItem _postItemForMessage(Map<String, dynamic> message) {
-    final String title = message['data']['title'];
-    final String urlPath = Uri.parse(message['data']['url']).path;
+    String title;
+    String urlPath;
+    if (message['data'] == null) {
+      title = message['title'];
+      urlPath = Uri.parse(message['url']).path;
+      debugPrint("message['url']: $message['url']");
+    } else {
+      title = message['data']['title'];
+      urlPath = Uri.parse(message['data']['url']).path;
+      debugPrint("message['data']['url']: $message['data']['url']");
+    }
     return new PostItem(title: title, urlPath: urlPath);
   }
 
