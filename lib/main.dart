@@ -232,15 +232,15 @@ class _MainPageState extends State<MainPage> {
   }
 
   PostItem _postItemForMessage(Map<String, dynamic> message) {
-    final String title = message['title'];
-    final String urlPath = Uri.parse(message['url']).path;
+    final String title = message['data']['title'];
+    final String urlPath = Uri.parse(message['data']['url']).path;
     return new PostItem(title: title, urlPath: urlPath);
   }
 
   void _showPostItemDialog(Map<String, dynamic> message) {
     showDialog<bool>(
       context: context,
-      child: _buildDialog(context, _postItemForMessage(message)),
+      builder: (_) => _buildDialog(context, _postItemForMessage(message)),
     ).then((bool shouldNavigate) {
       if (shouldNavigate == true) {
         _navigateToPostItem(message);
