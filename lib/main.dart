@@ -11,6 +11,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
 import 'package:package_info/package_info.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'database.dart';
 import 'favorite_icon_button.dart';
@@ -643,6 +644,35 @@ class SettingTabState extends State<SettingTab> {
       child: new ListView(
         children: <Widget>[
           const Padding(padding: const EdgeInsets.only(top: 32.0)),
+          new GestureDetector(
+            child: new Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: const Border(
+                  top: const BorderSide(
+                      color: const Color(0xFFBCBBC1), width: 0.0),
+                  bottom: const BorderSide(
+                      color: const Color(0xFFBCBBC1), width: 0.0),
+                ),
+              ),
+              height: 44.0,
+              child: new Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: new Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    new Text("Privary Policy",
+                        style: Theme.of(context).textTheme.body1),
+                  ],
+                ),
+              ),
+            ),
+            onTap: () {
+              launch("https://carirunners.blogspot.com/p/privacy-policy.html");
+            },
+          ),
           new Container(
             decoration: const BoxDecoration(
               color: Colors.white,
