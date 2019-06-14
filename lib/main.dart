@@ -6,7 +6,7 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_flux/flutter_flux.dart';
+import 'package:flutter_flux/flutter_flux.dart' as flux;
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
@@ -49,7 +49,7 @@ class _MainPageState extends State<MainPage> {
 
   final FirebaseAnalytics analytics;
   final FirebaseMessaging _firebaseMessaging = new FirebaseMessaging();
-  final Action<bool> remoteIsDirtyAction = new Action<bool>();
+  final flux.Action<bool> remoteIsDirtyAction = new flux.Action<bool>();
   String status;
   List<FavoriteModel> favoriteList = [];
 
@@ -270,7 +270,7 @@ class HomeTab extends StatefulWidget {
       : super(key: key);
 
   final FirebaseAnalytics analytics;
-  final Action<bool> remoteIsDirtyAction;
+  final flux.Action<bool> remoteIsDirtyAction;
   final List<FavoriteModel> favoriteList;
   final ValueChanged<FavoriteModel> onFavoriteAdded;
   final ValueChanged<FavoriteModel> onFavoriteRemoved;
